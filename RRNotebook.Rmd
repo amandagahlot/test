@@ -109,13 +109,41 @@ library(gtsummary)
 library(readxl)
 ```
 
-Set your working directory (save time, save sanity)
+First, set your working directory (save time, save sanity)
 
 ```{r set wd, echo=FALSE}
 setwd("/Users/amandagahlot/test")
 ```
 
-Then import your data
+## RedCAP
+
+Option 1: You can do this directly from RedCAP **if** you have API option in RedCAP. If so, follow these steps: https://cran.r-project.org/web/packages/tidyREDCap/vignettes/useAPI.html
+***Note that you never want to put your API token directly into your R code***
+
+Option 2: Export data from RedCAP *using raw data not labels* into CSV file and either work from there or save as excel file. 
+
+## GitHub
+
+Steps
+
+Go to the github repository link where you have the CSV file
+
+Click on the raw option present on the top right of the data
+
+This will open a new window in the browser
+
+The link should be like https://raw.githubusercontent.com/..
+
+You have to use this link to download csv file from the Github
+
+```{r, results='hide'}
+library (readr)
+
+urlfile="https://raw.githubusercontent.com/keithlohse/ReproRehab/refs/heads/main/data/data_PROCESSED_EEG.csv"
+
+keith_data<-read_csv(url(urlfile))
+```
+## Computer
  
 ```{r import data, results='hide'}
 
@@ -125,125 +153,247 @@ print(head(df))
 ```
 
 # 3. Data cleaning
+The best book I've used for understanding data cleaning and wrangling is: **R for Data Science** https://r4ds.had.co.nz/
 
-As an example, I want to rename some of my variables to define what they mean. For example, instead of "work_current" being 1 or 0, it will now be Yes or No. Because I only want to do this to create a demographics table, I don't want to mess with my original data frame. That would make some columns character instead of numeric or factor, which will mess me up later.
+## tidyverse
 
-So, I create a new data frame called df_demo and change it there, keeping my original data frame intact.
+The tidyverse is an opinionated collection of R packages designed for data science. All packages share an underlying design philosophy, grammar, and data structures. Tidyverse includes packages such as: *ggplot, tibble, forcats, readr, stringr, purr, and dplyr*
 
-```{r rename}
-df_demo <- df
-# level naming for categorical variables
-df_demo$gender <- factor(df_demo$gender,
+Introduction to tidyverse: https://www.tidyverse.org/packages/
+
+Citation for tidyverse:
+Wickham, H., Averick, M., Bryan, J., Chang, W., McGowan, L., R., F., Grolemund, G., Hayes, A., Henry, L., Kuhn, H., Pederson, T., Miller, E., Bache, S., Muller, K., Ooms, J., Robinson, D., Seidel, D., Spinu, V., Takahashi, K., . . . Yutani, H. (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686. https://doi.org/doi:10.21105/joss.01686 
+
+
+```{r tidyverse}
+
+#install(tidyverse)
+#library(tidyverse)
+```
+
+
+## dplyr
+
+dplyr is a grammar of data manipulation, providing a consistent set of verbs that help you solve the most common data manipulation challenges
+
+Cheat Sheet for dplyr/tidyverse: https://www.rstudio.com/wp-content%2Fuploads%2F2015%2F02%2Fdata-wrangling-cheatsheet.pdf%2F
+
+
+
+```{r}
+#mutate() adds new variables that are functions of existing variables
+#select() picks variables based on their names.
+#filter() picks cases based on their values.
+#summarise() reduces multiple values down to a single summary.
+#arrange() changes the ordering of the rows.
+```
+```{r mutate, results='hide'}
+#mutate (df, new_variable = existing_var*2)
+
+#below we're going to create two new variables, the first uses piping to add five individuals scores into a total score
+
+df <- df %>%
+  mutate(bfi_total = bfi_openness + bfi_extraversion + bfi_neuroticism + 
+                   bfi_consciousness + bfi_agreeable)
+
+#OR without piping, you can use this code and here we're only choosing the personality types associated with happiness
+
+df <- mutate(df, bfi_happy = bfi_openness + bfi_extraversion + bfi_agreeable)
+
+```
+
+
+```{r, results='hide'}
+
+#To see just one variable, you can select either with or without piping
+#select(df, variable_name)
+
+df %>% select(bfi_total)
+
+select(df, bfi_total)
+```
+```{r filter, results='hide'}
+
+#Now we can start to combine these data wrangling functions. Here I only want results for those people who are really happy. I can filter from the selected variable. 
+
+df %>%
+  filter(bfi_happy > 20) %>%
+  select(bfi_happy)
+#or without piping
+
+filtered_df <- filter(df, bfi_happy > 20)
+selected_df <- select(filtered_df, bfi_happy)
+```
+The summarise function is fun. It can:
+
+Condense data: Summarise large datasets into more manageable, aggregated results.
+
+Perform group-wise calculations: When used with group_by(), it lets you compute statistics for each group in the data (e.g., mean score for each age group).
+
+Efficiency: It's built for fast aggregation and calculation on large datasets.
+
+Readability: Simplifies code by avoiding more complex for loops.
+
+```{r summarise}
+df %>%
+  group_by(gender) %>%
+  summarise(mean_bfi_happy = mean(bfi_happy, na.rm = TRUE))
+```
+
+Uh oh, that gender variable is not helpful. Let's change it using our codebook 
+
+```{r gender rename}
+df$gender <- factor(df$gender,
                    levels = c(1,2,3),
                    labels = c("Male", "Female", "Nonbinary"))
-
-df_demo$work_current <- factor(df_demo$work_current,
-                   levels = c(1,0),
-                   labels = c("Yes", "No"))
-
-df_demo$severity <- factor(df_demo$severity,
-                   levels = c(2,3),
-                   labels = c("Moderate", "Severe"))
-
-df_demo$mech_injury <- factor(df_demo$mech_injury,
-                   levels = c(1,2,3,4,5),
-                   labels = c("Fall", "MVC", "Sports", "Violence", "Pedestrian struck"))
-
-df_demo$income <- factor(df_demo$income,
-                   levels = c(1,2,3),
-                   labels = c("<52K", "52K-156K", ">156K"))
-
-df_demo$marital_status <- factor(df_demo$marital_status,
-                                 levels = c(1, 2, 3, 4),
-                                 labels = c("Single", "Married", "Divorced", "Widowed"))
-
-```
- 
-Now I have two data frames, the original "df" which is still numeric and df_demo which is character
-
-# 4. Data analysis and visualization
-
-First, we create a table of demographic characteristics with the mean (sd) or N(%) 
-
-```{r demo total,  results='asis'}
-demo_table <- df_demo %>%
-  subset(., select = c(age_current, time_injury, gender, edu, race, work_current, income, house_size, marital_status, substance, severity, mech_injury)) %>%
-  tbl_summary(
-    missing = "no",
-    type = list(
-      c(age_current, edu, house_size, substance, time_injury) ~ "continuous",
-      c(gender, income, work_current, severity, mech_injury) ~ "categorical"
-    ),
-    statistic = list(all_continuous() ~ "{mean} ({sd})", all_categorical() ~ "{n} ({p}%)"),
-    label = list(
-      age_current ~ "Age (years)",
-      time_injury ~ "Time since TBI (years)",
-      gender ~ "Gender",
-      race ~ "Race/Ethnicity",
-      edu ~ "Education (years)",
-      work_current ~ "Employment status",
-      income ~ "Annual household income",
-      house_size ~ "Size household",
-      marital_status ~ "Marital status",
-      substance ~ "Substance use score",
-      mech_injury ~ "Cause of injury",
-      severity ~ "Severity of Injury"
-    )
-  ) %>%
-  add_n()
-
-print(demo_table)
-
 ```
 
-What about visualizations? Next, we create a heat map correlation plot to examine the relationships between variables
+.... and try again. I also want to round to the 3rd decimal place as the rounded answer was the same...
 
-```{r heatmap, results='asis'}
-library(ggplot2)
-library(reshape2)
-library(Hmisc)
+```{r gender by happiness}
+df %>%
+  group_by(gender) %>%
+  summarise(mean_bfi_happy = round(mean(bfi_happy, na.rm = TRUE), 3))
+```
+### Piping
 
-all_variables <- c("age_current", "time_injury", "gender", "edu", "work_current", "income", "severity", "substance", "acsg_retain", "acsi_retain",  "acsl_retain",  "acsf_retain", "acss_retain", "tbiqol_anxiety_tscore", "tbiqol_comm_tscore", "tbiqol_ue_tscore","tbiqol_depression_tscore", "tbiqol_fatigue_tscore", "tbiqol_genconcern_tscore", "frsbe_apathy", "frsbe_exec", "frsbe_disinhib", "frsbe_total")
+Piping is a programming technique that allows you to pass the output of one function directly as the input to another function, creating a seamless flow of data transformation. In R, the most commonly used piping operator is %>%, which is provided by the _magrittr_ package and is also included in the _dplyr_ package as part of the tidyverse ecosystem.
 
-all_variables <- intersect(all_variables, colnames(df))  # Ensure selected variables are in the dataframe
+How Piping Works:
+When you use the pipe operator %>%, it takes the output of the expression on its left and "pipes" it into the function on its right. This makes the code more readable and intuitive, as it flows from one operation to the next in a left-to-right manner.
 
-all_variables_df <- df[, all_variables]
+## Outliers
+Searching for outliers before analyzing data is important because outliers can significantly affect your results and interpretations.
 
-cor_matrix <- rcorr(as.matrix(all_variables_df),type = "spearman")$r
-cor_matrix[upper.tri(cor_matrix)] <- NA
-p_matrix <- rcorr(as.matrix(all_variables_df),type = "spearman")$P
-p_matrix[is.na(p_matrix)]=.0000001
-p_matrix[upper.tri(p_matrix)] <- NA
+We can find outliers using descriptive statistics and with visualizations
 
-# Melt the correlation matrix for ggplot
-melted_cor <- melt(cor_matrix,na.rm = T)
-melted_p = melt(p_matrix,na.rm = T)
+```{r outliers_stats, results='asis'}
+summary_stats <- describeBy(df) %>% round(2)
 
-melted_cor$p=melted_p$value
-melted_cor$psig=""
-melted_cor$psig[melted_cor$p<.05]="*"
-melted_cor$psig[melted_cor$p<.01]="**"
-melted_cor$psig[melted_cor$p<.001]="***"
+# Display the summary statistics using kable
+knitr::kable(summary_stats)
+```
+```{r vis outliers}
+#create a function first, then we can add in any variables we want to see if there are outliers
 
-# Create a heatmap using ggplot2
-ggplot(melted_cor, aes(Var1, Var2, fill = value)) +
-  geom_tile(color = "white") +
-  geom_text(aes(label = round(value,2)), vjust = 1, size = 2) +  # Adjust size here
-  geom_text(aes(label = psig), vjust = .25, size = 6) +  # Adjust size here
-  scale_fill_gradient2(low = "purple", mid = "white", high = "orange", 
-                       midpoint = 0, limit = c(-1,1), space = "Lab",
-                       name = "Correlation") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),  # Adjust size here
-        axis.text.y = element_text(angle = 45, hjust = 1, size = 10),  # Adjust size here
-        axis.title = element_text(size = 14),
-        axis.ticks = element_line(size = 1)) +
-  labs(caption = "<.05 = *, <.01 = **, <.001 = ***") +
-  xlab("") +
-  ylab("") +
-  ggtitle("Correlation Matrix all variables")
+plot_hist_box <- function(df, var) {
+  # Load required package
+  library(ggplot2)
+  
+  # Create a histogram
+  p1 <- ggplot(df, aes_string(x = var)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "lightblue") +
+    labs(title = paste("Histogram of", var), x = var, y = "Frequency")
+  
+  # Create a vertical boxplot
+  p2 <- ggplot(df, aes_string(y = var)) +  # 'y' instead of 'x' for vertical
+    geom_boxplot(fill = "lightgreen") +
+    labs(title = paste("Boxplot of", var), y = var, x = "")  # Empty x label
+  
+  # Print the plots side by side
+  gridExtra::grid.arrange(p1, p2, ncol = 2)
+}
+
+# Example usage:
+plot_hist_box(df, "bfi_happy")
+
 
 ```
+```{r function fun}
+# now we can apply that function to any variable easily
+
+plot_hist_box(df, 'frsbe_apathy')
+
+#functions can be helpful because
+```
+*Reference for ggplot2:
+Wickham, H., Chang, W., & Wickham, M. H. (2016). Package ‘ggplot2’. Create elegant data visualisations using the grammar of graphics. Version, 2(1), 1-189.* 
+
+### Fun with Functions
+Using functions in R (or any programming language) offers several key benefits beyond just making the code shorter and cleaner. Here are some of the primary advantages:
+
+Reusability: Functions allow you to write a block of code once and reuse it multiple times throughout your script or across different scripts. This reduces redundancy and minimizes the risk of errors since you only need to update the function in one place if changes are needed.
+
+Modularity: Functions break down complex problems into smaller, manageable pieces. This modular approach makes it easier to understand and debug your code, as you can focus on one function at a time without being overwhelmed by the entire program.
+
+Readability and Clarity: Functions can improve the readability of your code by providing meaningful names that describe what the function does. This makes it easier for others (or yourself in the future) to understand the logic and purpose of your code.
+
+Abstraction: Functions can encapsulate complex operations, allowing users to interact with a simple interface while hiding the underlying complexity. This abstraction simplifies code usage, making it accessible to those who may not need to understand the details.
+
+Testing and Debugging: Functions make it easier to isolate and test specific parts of your code. You can test individual functions independently to ensure they work correctly before integrating them into larger workflows.
+
+Consistency: Using functions can help maintain consistency in your analyses. When you apply the same function to similar data structures or processes, you’re more likely to get consistent results.
+
+Parameterization: Functions can accept arguments, allowing you to customize their behavior without modifying the function's internal code. This flexibility enables you to adapt the function to different datasets or conditions without rewriting code.
+
+Performance: In some cases, functions can improve performance by optimizing specific operations. For instance, vectorized operations in R can be implemented in functions to leverage R's efficient handling of vectors and matrices.
+
+To learn more:
+
+https://www.datacamp.com/tutorial/functions-in-r-a-tutorial
+
+https://r4ds.hadley.nz/functions.html
+
+
+### Handling outliers
+
+If a value was entered incorrectly, we can just fix it....
+
+Found that record 001 was incorrectly entered as 270 and I want to change to the correct response of 27
+
+```{r fixing}
+df$frsbe_apathy[df$record_id == "001"] <- 27
+
+#check the updated value
+df[df$record_id == "001", c("record_id", "frsbe_apathy")]
+
+```
+If the value is correct, but is skewing everything up...
+
+```{r find it}
+#first we have to find the record/ID
+
+# Display record_id and bfi_happiness scores
+associated_records <- df %>%
+  select(record_id, bfi_happy)
+
+# View the results
+print(associated_records)
+
+```
+or....
+```{r}
+# Find record_id where bfi_happiness <10
+outlier_bfi_happy_records <- df %>%
+  filter(bfi_happy < 10) %>%
+  select(record_id, bfi_happy)
+
+# View the results
+print(outlier_bfi_happy_records)
+
+```
+Then create a new data frame that drops those outliers. Then you can do any future analysis on df_happy when appropriate, but use df when df_happy isn't involved
+
+```{r df_happy}
+df_happy <- df %>%
+  filter(!record_id %in% c("011", "058"))
+```
+
+## Save clean file
+
+I do all of my data cleaning and wrangling in a different Notebook than my analysis. Find a workflow that works for you, but it keeps it easier for me with less errors as packages start to overlap. It also keeps you from having to go back and re-clean everytime you want to do a new analysis
+
+```{r save clean file}
+#install needed package
+#install.packages("writexl")
+library("writexl")
+
+#export df_happy to an excel file
+write_xlsx(df_happy, "df_cleaned.xlsx")
+
+```
+
+
 
 
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
